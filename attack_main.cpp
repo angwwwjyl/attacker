@@ -50,6 +50,8 @@ int main(int argc, char **argv)
 }
 #endif
 
+
+#if 0
 /*
  * test log
  * 20150804
@@ -85,6 +87,37 @@ int main()
     idl.DoLog(0x20, "helloddd");
     idl.DoLog(0x40, "helloddd");
     idl.DoLog(0x80, "helloddd");
+
+    return 0;
+}
+#endif
+
+#include <attacker_hostinfo.h>
+#include <attacker_util.h>
+#include <attacker_log.h>
+
+#include <iostream>
+using namespace std;
+
+int main()
+{
+     
+    ATLogDebugInit();
+    ATLogErrorInit();
+
+    CHostInfo ihi;
+    //HostBaseInfo *ibi;
+    HostInetInfo *iii;
+    InetInfoList_T *iil;
+    InetInfoList_T::iterator it;
+
+    ihi.QueryInetInfo();
+    //ibi = ihi.GetBaseInfo();
+    iil = ihi.GetInetInfo();
+    it = iil->begin();
+
+    iii = *it;
+    ihi.QuerySubnetAddrMacInfo(iii->m_nAddr, iii->m_nMask);
 
     return 0;
 }

@@ -69,6 +69,14 @@ class CLogger
 
         int GetFd() { return m_nFd; }
         char* GetLogFileName() { return m_caFileName; }
+        void SetLogFileName(const char *filename) 
+        {
+            if (NULL != filename) 
+                CLibUtil::Strncpy(m_caFileName, const_cast<char*>(filename), LOGGER_FILENAME_LEN);
+            else
+                m_caFileName[0] = '\0';
+
+        }
 
         off_t GetCurSize() { return m_nCurSize; }
         int GetMaxSize() { return m_nMaxSize; }
@@ -110,7 +118,26 @@ class CRunningLogger : public CLogger
         int DoLog(int level, const char* fmt, ...);
 };
 
-
-
 } /*namespace AT*/
+
+extern AT::CDebugLogger g_iDebugLogger;
+extern AT::CRunningLogger g_iRunningLogger;
+
+#define ATLogDebugInit()    g_iDebugLogger.DoInit()
+#define ATLogErrorInit()    g_iRunningLogger.DoInit()
+
+#define ATLogDebugInitWithFileName(fname)    do { \
+    g_iDebugLogger.SetLogFileName(fname);  \
+    g_iDebugLogger.DoInit(); \
+}while(0)
+#define ATLogErrorInitWithFileName(fname)    do { \
+    g_iRunningLogger.SetLogFileName(fname);  \
+    g_iRunningLogger.DoInit(); \
+}while(0)
+
+#define ATLogDebug(level, fmt, args...)     g_iDebugLogger.DoLog(level, fmt, ##args) 
+#define ATLogError(level, fmt, args...)     g_iRunningLogger.DoLog(level, fmt, ##args)
+
+
+
 #endif

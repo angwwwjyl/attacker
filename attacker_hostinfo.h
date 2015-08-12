@@ -27,6 +27,14 @@ typedef struct HostInetInfo
     u_char m_caMac[ETH_ALEN];
 }HostInetInfo_T;
 
+class CHostInfo;
+typedef struct ArpSendThreadArg
+{
+    in_addr_t m_nAddrStart;
+    in_addr_t m_nAddrEnd;
+    CHostInfo *m_iHostInfo;  
+}ArpSendThreadArg_T;
+
 
 typedef std::map<in_addr_t, u_char[ETH_ALEN]> AddrMacMap_T;
 typedef std::map<in_addr_t, AddrMacMap_T*> SubnetAddrMacMap_T;
@@ -48,6 +56,9 @@ class CHostInfo
             return &m_imSubnetAddrMacInfo;
         }
         
+        SubnetAddrMacMap_T* GetSubnetAddrMacMap() { return &m_imSubnetAddrMacInfo;} 
+        HostInetInfo* GetQuerySubnetInfo() { return m_iSubnetInfo; }
+
     private:
         HostBaseInfo_T m_itBaseInfo;
         InetInfoList_T m_ilInetInfo;
@@ -60,10 +71,26 @@ class CHostInfo
         #define ARP_SEND_END_UNDONE   0
 
         u_int m_nArpSendThreadNum; 
-        pthread_t m_ngArpSend[ARP_SEND_THREAD_MAX_NUM];
-        u_int m_nArpSendEndFlag;    /* equal to m_nArpSendEndDone, sned end*/
+        pthread_t m_ngArpSendTids[ARP_SEND_THREAD_MAX_NUM];
+        pthread_t m_nArpRecvTid;
+        volatile u_int m_nArpSendEndFlag;    /* equal to m_nArpSendEndDone, sned end*/
         u_int m_nArpSendEndDone;   /*depend on m_nArpSendThreadNum*/ 
         u_int m_nArpRecvEnd; /*match with macro*/
+        
+        /*subnet: net byteorder*/
+        int __FindNICBySubAddr(in_addr_t subnet, char* ifname);
+        HostInetInfo* __FindHostInfoBySubAddr(in_addr_t subnet);
+        void __SetThreadArgs(int nsubhost);
+        int __CreateAndRunRecvThread(CHostInfo* hinfo);
+        int __CreateAndRunSendThreads(CHostInfo* hinfo);
+
+        /*function for thread excution*/
+        static void* __RecvArpFunc(void *arg);
+        static void* __SendArpFunc(void *arg);
+
+        /*query ip-mac in this subnet used in thread*/
+        HostInetInfo* m_iSubnetInfo;
+        ArpSendThreadArg_T m_tgArpSendThreadArg[ARP_SEND_THREAD_MAX_NUM];
 };
 
 

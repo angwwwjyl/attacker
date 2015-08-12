@@ -7,6 +7,9 @@
 #include <sys/stat.h>
 
 
+AT::CDebugLogger g_iDebugLogger;
+AT::CRunningLogger g_iRunningLogger;
+
 const static char* gs_caLogLevelStr[AT::LOG_LEVEL_MAX] =
 { 
     "stderr", "emerg", "alert", "crit",
@@ -103,7 +106,7 @@ int AT::CDebugLogger::DoLog(int level, const char* fmt, ...)
     CLibUtil::GetTimeofDay(&tTV, NULL);
     CLibUtil::GetMtime(tTV.tv_sec, &tTM);
     nlen = CLibUtil::Snprintf(cabuf, BUF_LEN, "%s %s-%4d/%02d/%02d-%02d:%02d:%02d %d %d %d %s ",
-            "debug", gs_caWeek[tTM.tm_wday],
+            "[debug]", gs_caWeek[tTM.tm_wday],
             tTM.tm_year, tTM.tm_mon, tTM.tm_mday, tTM.tm_hour,
             tTM.tm_min, tTM.tm_sec, m_nPpid, m_nPid,
             m_nTid, gs_caDebugStr[n]);
@@ -179,7 +182,7 @@ int AT::CRunningLogger::DoLog(int level, const char* fmt, ...)
     CLibUtil::GetTimeofDay(&tTV, NULL);
     CLibUtil::GetMtime(tTV.tv_sec, &tTM);
     nlen = CLibUtil::Snprintf(cabuf, BUF_LEN, 
-            "%s %s-%4d/%02d/%02d-%02d:%02d:%02d %d %d %d ",
+            "[%s] %s-%4d/%02d/%02d-%02d:%02d:%02d %d %d %d ",
             gs_caLogLevelStr[level], gs_caWeek[tTM.tm_wday],
             tTM.tm_year, tTM.tm_mon, tTM.tm_mday, tTM.tm_hour,
             tTM.tm_min, tTM.tm_sec, m_nPpid, m_nPid,
