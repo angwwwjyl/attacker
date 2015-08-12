@@ -50,7 +50,6 @@ int main(int argc, char **argv)
 }
 #endif
 
-
 #if 0
 /*
  * test log
@@ -63,6 +62,7 @@ using namespace std;
 
 int main()
 {
+#if 0
     int ret;
 
     AT::CDebugLogger idl;
@@ -87,10 +87,21 @@ int main()
     idl.DoLog(0x20, "helloddd");
     idl.DoLog(0x40, "helloddd");
     idl.DoLog(0x80, "helloddd");
+#endif
+    
+    ATLogErrorInit();
+
+    cout << __FILE__ << __LINE__ << endl;
+
+    ATLogError(AT::LOG_ERR, "%s, %d", __FILE__, __LINE__);
 
     return 0;
 }
 #endif
+
+/*test hostinfo subnet ip-mac pairs
+ * 20150812
+ * */
 
 #include <attacker_hostinfo.h>
 #include <attacker_util.h>
@@ -101,7 +112,8 @@ using namespace std;
 
 int main()
 {
-     
+    int ret;
+
     ATLogDebugInit();
     ATLogErrorInit();
 
@@ -117,7 +129,12 @@ int main()
     it = iil->begin();
 
     iii = *it;
-    ihi.QuerySubnetAddrMacInfo(iii->m_nAddr, iii->m_nMask);
+    ret = ihi.QuerySubnetAddrMacInfo(iii->m_nAddr, iii->m_nMask);
+    if (ret != 0)
+    {
+        cout << "ret:" << ret << endl;
+        perror("subnet error");
+    }
 
     return 0;
 }
