@@ -34,15 +34,24 @@ class CLibUtil
         }
         //#define Memset(s, c, n)  memset(s, c, n)
         //#define Memzero(s, n)  memset(s, 0x0, n)
-        
+
         static int Snprintf(char *str, size_t size, const char *format, ...)
-        {
+        {   
             int len;
 
             va_list args;
             va_start(args, format);
             len = vsnprintf(str, size, format, args); /*add '\0' to tailing of str*/
             va_end(args);
+
+            return len;
+        }
+
+        static inline int Vsnprintf(char *str, size_t size, const char *format, va_list ap) 
+        {
+            int len;
+
+            len = vsnprintf(str, size, format, ap); /*add '\0' to tailing of str*/
             
             return len;
         }
@@ -83,6 +92,7 @@ class CLibUtil
 
 
 #define INVAILD_ADDR (0)
+#define INVAILD_NETMASK (0)
 #define INVAILD_INFINDEX (-1)
 #define STRADDR_MIN_LEN (8)
 #define FULL_STRADDR_MIN_LEN (16)
@@ -122,6 +132,9 @@ class CNetUtil
         static u_char* GetInfMac(const char* infname, u_char* mac);
         static u_char* GetInfMacWithFd(int fd, const char* infname, u_char* mac);
 
+        /*if fail return INVAILD_NETMASK*/
+        static in_addr_t GetNetMask(const char* ifname, in_addr_t netaddr);
+        static in_addr_t GetNetMaskWithFd(int fd, const char* ifname, in_addr_t netaddr);
 
     private:
         CNetUtil() {}  /*don't construct*/

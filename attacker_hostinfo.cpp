@@ -1,6 +1,7 @@
 #include <attacker_hostinfo.h>
 
 #include <attacker_util.h>
+#include <attacker_log.h>
 
 #include <sys/types.h>
 #include <errno.h>
@@ -108,6 +109,8 @@ int CHostInfo::QueryInetInfo()
         
         CLibUtil::Strncpy(tInetInfo->m_caIfname, tIfr->ifr_name, IFNAMSIZ);
         tInetInfo->m_nAddr = ((struct sockaddr_in*)&(tIfr->ifr_addr))->sin_addr.s_addr;
+        tInetInfo->m_nMask = CNetUtil::GetNetMaskWithFd(fd, 
+                tInetInfo->m_caIfname, tInetInfo->m_nAddr);
 
         m_ilInetInfo.push_back(tInetInfo);
 
@@ -185,7 +188,10 @@ HostInetInfo* CHostInfo::__FindHostInfoBySubAddr(in_addr_t subnet)
 
 void* CHostInfo::__RecvArpFunc(void *arg)
 {
-    printf("i am recv");
+    CHostInfo* ipHostInfo = (CHostInfo*)arg;
+    printf("i am recv\n");
+    
+    printf("recv hostinfo: %p\n", ipHostInfo);
 
     return NULL;
 }
@@ -209,7 +215,13 @@ int CHostInfo::__CreateAndRunRecvThread(CHostInfo* hinfo)
 
 void* CHostInfo::__SendArpFunc(void *arg)
 {
-    printf("i am send");
+    ArpSendThreadArg_T* tpSendThreadArg = (ArpSendThreadArg_T*)arg;
+
+    printf("i am send\n");
+    printf("start:%08x end: %08x\n", 
+            tpSendThreadArg->m_nAddrStart, tpSendThreadArg->m_nAddrEnd);
+    printf("hostinfo: %p\n", tpSendThreadArg->m_iHostInfo);
+
     return NULL;
 }
 
@@ -229,11 +241,12 @@ int CHostInfo::__CreateAndRunSendThreads(CHostInfo* hinfo)
     if (NULL == hinfo->m_iSubnetInfo)
         return -EINVAL;
 
-    nHostCnt = ntohl(hinfo->m_iSubnetInfo->m_nAddr & ~hinfo->m_iSubnetInfo->m_nMask);
+    nHostCnt = ntohl(~hinfo->m_iSubnetInfo->m_nMask);
     nHostCntPerthread = nHostCnt / hinfo->m_nArpSendThreadNum;
-    nHostCntFraction = nHostCnt % hinfo->m_nArpSendThreadNum;
+    nHostCntFraction = nHostCnt % hinfo->m_nArpSendThreadNum - 1; /*not including xxx.xxx.xxx.255*/
 
-    subnetaddr = ntohl(hinfo->m_iSubnetInfo->m_nAddr & hinfo->m_iSubnetInfo->m_nMask);
+    subnetaddr = ntohl(hinfo->m_iSubnetInfo->m_nAddr & 
+            hinfo->m_iSubnetInfo->m_nMask); 
     for (i = 0; i < hinfo->m_nArpSendThreadNum-1; i++)
     {
         tThreadArg = &hinfo->m_tgArpSendThreadArg[i];
@@ -298,17 +311,23 @@ int CHostInfo::QuerySubnetAddrMacInfo(in_addr_t netaddr, in_addr_t mask)
     AddrMacMap_T *imAddrmac;
 
     in_addr_t subnet = netaddr & mask;
-    int ncount = ntohl(netaddr & (~mask));
+    int ncount = ntohl(~mask);
     HostInetInfo* iSubnetInfo;
    
-    if (ncount < 2)
+    if (mask == 0 || ncount < 2)
     {
+        ATLogError(AT::LOG_ERR, "subhost count error! %s:%d %s", 
+                __FILE__, __LINE__, __func__);
         return -EINVAL;
     }
 
     iSubnetInfo = __FindHostInfoBySubAddr(subnet);
     if (NULL == iSubnetInfo)
+    {
+        ATLogError(AT::LOG_ERR, "subnet is not exist! %s:%d %s", 
+                __FILE__, __LINE__, __func__);
         return -ENOENT;
+    }
     m_iSubnetInfo = iSubnetInfo;
 
     /*clear old data*/
@@ -327,7 +346,11 @@ int CHostInfo::QuerySubnetAddrMacInfo(in_addr_t netaddr, in_addr_t mask)
     
     __SetThreadArgs(ncount);
 
+    __CreateAndRunRecvThread(this);
 
+    __CreateAndRunSendThreads(this);
+
+    sleep(10);
 
 
     return 0;

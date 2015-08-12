@@ -112,7 +112,7 @@ int AT::CDebugLogger::DoLog(int level, const char* fmt, ...)
             m_nTid, gs_caDebugStr[n]);
     
     va_start(args, fmt);
-    nlen += CLibUtil::Snprintf(cabuf+nlen, BUF_LEN-nlen, fmt, args); 
+    nlen += CLibUtil::Vsnprintf(cabuf+nlen, BUF_LEN-nlen, fmt, args); 
     va_end(args);
 
     pfmt = const_cast<char*>(fmt);
@@ -189,7 +189,7 @@ int AT::CRunningLogger::DoLog(int level, const char* fmt, ...)
             m_nTid);
     
     va_start(args, fmt);
-    nlen += CLibUtil::Snprintf(cabuf+nlen, BUF_LEN-nlen, fmt, args); 
+    nlen += CLibUtil::Vsnprintf(cabuf+nlen, BUF_LEN-nlen, fmt, args); 
     va_end(args);
 
     pfmt = const_cast<char*>(fmt);

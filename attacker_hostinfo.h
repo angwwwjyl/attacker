@@ -30,8 +30,8 @@ typedef struct HostInetInfo
 class CHostInfo;
 typedef struct ArpSendThreadArg
 {
-    in_addr_t m_nAddrStart;
-    in_addr_t m_nAddrEnd;
+    in_addr_t m_nAddrStart;  //hostorder
+    in_addr_t m_nAddrEnd;   //hostorder
     CHostInfo *m_iHostInfo;  
 }ArpSendThreadArg_T;
 

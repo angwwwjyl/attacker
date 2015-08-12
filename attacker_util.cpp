@@ -398,12 +398,16 @@ int CNetUtil::GetInfindexWithFd(int fd, const char* infname)
 int CNetUtil::GetInfindex(const char* infname)
 {
     int fd;
+    int ret;
 
     fd = CLibUtil::Socket(PF_INET, SOCK_DGRAM, 0);
     if (fd < 0)
         return INVAILD_INFINDEX;
 
-    return GetInfindexWithFd(fd, infname);
+    ret = GetInfindexWithFd(fd, infname);
+
+    close(fd);
+    return ret;
 }
 
 /*if fail return NULL*/
@@ -430,12 +434,52 @@ u_char* CNetUtil::GetInfMacWithFd(int fd, const char* infname, u_char* mac)
 u_char* CNetUtil::GetInfMac(const char* infname, u_char* mac)
 {
     int fd;
+    u_char *pc;
 
     fd = CLibUtil::Socket(PF_INET, SOCK_DGRAM, 0);
     if (fd < 0)
         return NULL;
 
-    return GetInfMacWithFd(fd, infname, mac);
+    pc = GetInfMacWithFd(fd, infname, mac);
+
+    close(fd);
+    return pc;
+}
+
+in_addr_t CNetUtil::GetNetMaskWithFd(int fd, const char* ifname, in_addr_t netaddr)
+{
+    struct ifreq tIfr;
+    struct sockaddr_in *tpSockaddr;
+
+    if (fd < 0 || NULL == ifname)
+        return INVAILD_NETMASK;
+
+    CLibUtil::Strncpy(tIfr.ifr_name, const_cast<char*>(ifname), IFNAMSIZ);
+    tpSockaddr = (struct sockaddr_in*)&(tIfr.ifr_addr);
+    tpSockaddr->sin_addr.s_addr = netaddr;
+
+    if (CLibUtil::IOCtl(fd, SIOCGIFNETMASK, &tIfr) < 0)   
+    {
+        //perror("ioctl error:");
+        return INVAILD_NETMASK;
+    }
+
+    return tpSockaddr->sin_addr.s_addr;
+}
+
+in_addr_t CNetUtil::GetNetMask(const char* ifname, in_addr_t netaddr)
+{
+    int fd;
+    in_addr_t mask;
+
+    fd = CLibUtil::Socket(PF_INET, SOCK_DGRAM, 0);
+    if (fd < 0)
+        return INVAILD_NETMASK;
+
+    mask = GetNetMaskWithFd(fd, ifname, netaddr); 
+
+    close(fd);
+    return mask;
 }
 
 
