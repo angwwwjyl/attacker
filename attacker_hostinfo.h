@@ -91,6 +91,15 @@ class CHostInfo
             return 0;
         }
 
+        bool IsArpSendEnd()
+        {
+            return (m_nArpSendEndFlag == m_nArpSendEndDone);
+        }
+
+        void SetArpSendThreadDoneFlag(pthread_t id)
+        {
+            m_nArpSendEndFlag++;
+        }
 
     private:
         HostBaseInfo_T m_itBaseInfo;

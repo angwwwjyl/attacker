@@ -253,6 +253,9 @@ void* CHostInfo::__RecvArpFunc(void *arg)
     tTimeout.tv_sec = ARP_RECV_SELECT_TIMEOUT_SEC;
     for (; true ;)
     {
+        if (ipHostInfo->IsArpSendEnd())
+            break;
+
         FD_ZERO(&fds);
         FD_SET(fd, &fds);
 
@@ -321,15 +324,25 @@ void* CHostInfo::__SendArpFunc(void *arg)
     ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s arg:%p", 
             __FILE__, __LINE__, __func__, arg);
     
-    if ( NULL == arg)
-        return NULL;
-
     ArpSendThreadArg_T* tpSendThreadArg = (ArpSendThreadArg_T*)arg;
+    CHostInfo* ipHostInfo = tpSendThreadArg->m_iHostInfo;
+
+    if ( NULL == arg)
+    {
+        goto lab_end;
+    }
+    if (NULL == ipHostInfo)
+    {
+        goto lab_end;
+    }
 
     printf("start:%08x end: %08x\n", 
             tpSendThreadArg->m_nAddrStart, tpSendThreadArg->m_nAddrEnd);
     printf("hostinfo: %p\n", tpSendThreadArg->m_iHostInfo);
 
+    
+lab_end:
+    ipHostInfo->SetArpSendThreadDoneFlag(pthread_self());
     return NULL;
 }
 
