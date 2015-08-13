@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <pthread.h>
+#include <sys/select.h>
 
 #include <map>
 #include <string>
@@ -188,11 +189,113 @@ HostInetInfo* CHostInfo::__FindHostInfoBySubAddr(in_addr_t subnet)
 
 void* CHostInfo::__RecvArpFunc(void *arg)
 {
-    CHostInfo* ipHostInfo = (CHostInfo*)arg;
-    printf("i am recv\n");
-    
-    printf("recv hostinfo: %p\n", ipHostInfo);
+    ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s arg:%p", 
+            __FILE__, __LINE__, __func__, arg);
 
+    if ( NULL == arg)
+        return NULL;
+
+    CHostInfo* ipHostInfo = (CHostInfo*)arg;
+    int fd;
+    fd_set fds;
+    struct timeval tTimeout;
+    size_t nRecvLen;
+    struct sockaddr_ll tSockaddrll;
+    HostInetInfo* ipHostInet = ipHostInfo->m_iSubnetInfo;
+    u_char cgBuf[ARP_RECV_BUF_LEN];
+    ETH_ARP_T* tArpHdrData;
+    in_addr_t nSubnetNetAddr;
+    AddrMacMap_T* mpAddrMac; 
+    char cgBufForStrAddr[24];
+    char cgBufForStrMac[24];
+
+    if (NULL == ipHostInfo)
+    {
+        ATLogError(AT::LOG_ERR, "%s:%d %s lack of subnet info!",
+                __FILE__, __LINE__, __func__);
+        return NULL;
+    }
+
+    nSubnetNetAddr = ipHostInet->m_nAddr & ipHostInet->m_nMask;
+    mpAddrMac = ipHostInfo->FindAddrMacMapBySubnet(nSubnetNetAddr);
+    if (NULL == mpAddrMac)
+    {
+        ATLogError(AT::LOG_ERR, "%s:%d %s lack of map for addr-mac!",
+                __FILE__, __LINE__, __func__);
+        return NULL;
+    }
+
+    fd = CLibUtil::Socket(PF_PACKET, SOCK_RAW, CLibUtil::Htons(ETH_P_ARP));
+    if (fd < 0)
+    {
+        ATLogError(AT::LOG_ERR, "%s:%d %s socket error!",
+                __FILE__, __LINE__, __func__);
+        return NULL;
+    }
+
+    CLibUtil::Memzero(&tSockaddrll, sizeof(tSockaddrll));
+    tSockaddrll.sll_family = PF_PACKET;
+    tSockaddrll.sll_protocol = CLibUtil::Htons(ETH_P_ARP);
+    tSockaddrll.sll_ifindex = ipHostInet->m_nInfindex;   
+    tSockaddrll.sll_hatype = htons(ARPHRD_ETHER);
+    tSockaddrll.sll_pkttype = PACKET_HOST;
+    tSockaddrll.sll_halen = ETH_ALEN;
+    CLibUtil::Memcpy(tSockaddrll.sll_addr, ipHostInet->m_caMac, ETH_ALEN);
+
+    if (0 != bind(fd, (struct sockaddr*)&tSockaddrll, sizeof(tSockaddrll)))
+    {
+        ATLogError(AT::LOG_ERR, "%s:%d %s bind error!",
+                __FILE__, __LINE__, __func__);
+        goto lab_close;
+    }
+   
+    tTimeout.tv_usec = 0;
+    tTimeout.tv_sec = ARP_RECV_SELECT_TIMEOUT_SEC;
+    for (; true ;)
+    {
+        FD_ZERO(&fds);
+        FD_SET(fd, &fds);
+
+        if (select(fd+1, &fds, NULL, NULL, &tTimeout) < 0)
+            continue;
+
+        nRecvLen = recv(fd, cgBuf, ARP_RECV_BUF_LEN, 0); 
+        if (nRecvLen < sizeof(ETH_ARP_T))
+            continue;
+        
+        tArpHdrData = (struct eth_arp*)cgBuf;
+        if (tArpHdrData->ah.ar_op != CLibUtil::Htons(ARPOP_REPLY))
+        {
+            continue;
+        }
+
+        /*this arp reply is not send to me*/
+        if ( *((in_addr_t*)tArpHdrData->tip) != ipHostInet->m_nAddr)
+        {
+            continue;
+        }
+
+        /*not in local subnet*/
+        if ( *((in_addr_t*)tArpHdrData->sip) != nSubnetNetAddr)
+        {
+            continue;
+        }
+        
+        if (ipHostInfo->AddAddrMacToMap(mpAddrMac, *(in_addr_t*)tArpHdrData->sip,
+                    tArpHdrData->smac) != 0)
+        {
+            CNetUtil::NetAddrToStrAddr(*(in_addr_t*)tArpHdrData->sip, cgBufForStrAddr);
+            CNetUtil::MacToStrMac(tArpHdrData->smac, cgBufForStrMac);
+            ATLogError(AT::LOG_WARN, "%s:%d %s ipconfilct %s<-->%s",
+                    __FILE__, __LINE__, __func__,
+                    cgBufForStrAddr, cgBufForStrMac);
+
+        }
+
+    }
+
+lab_close:
+    close(fd);
     return NULL;
 }
 
@@ -215,9 +318,14 @@ int CHostInfo::__CreateAndRunRecvThread(CHostInfo* hinfo)
 
 void* CHostInfo::__SendArpFunc(void *arg)
 {
+    ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s arg:%p", 
+            __FILE__, __LINE__, __func__, arg);
+    
+    if ( NULL == arg)
+        return NULL;
+
     ArpSendThreadArg_T* tpSendThreadArg = (ArpSendThreadArg_T*)arg;
 
-    printf("i am send\n");
     printf("start:%08x end: %08x\n", 
             tpSendThreadArg->m_nAddrStart, tpSendThreadArg->m_nAddrEnd);
     printf("hostinfo: %p\n", tpSendThreadArg->m_iHostInfo);

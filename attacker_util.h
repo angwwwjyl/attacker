@@ -82,6 +82,22 @@ class CLibUtil
         }
         static void GetMtime(time_t sec, struct tm* gmt);
         
+        static uint16_t Htons(uint16_t hostshort) 
+        {
+            return htons(hostshort);
+        }
+        static uint32_t Htonl(uint32_t hostlong)
+        {
+            return htonl(hostlong);
+        }
+        static uint32_t Ntohl(uint32_t netlong)
+        {
+            return ntohl(netlong);
+        }
+        static uint16_t Ntohs(uint16_t netshort)
+        {
+            return ntohs(netshort);
+        }
 
     private:
         CLibUtil() {}  /*don't construct*/
