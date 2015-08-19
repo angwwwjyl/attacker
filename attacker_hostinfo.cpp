@@ -142,6 +142,52 @@ lab_close:
     return nRet;
 }
 
+
+/*for send arp using inet addr int eth network*/
+int CHostInfo::SendEthInetArp(int fd, SendEthInetARPArg_T* arg)
+{
+    /*ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s arg:%p", 
+            __FILE__, __LINE__, __func__, arg);
+    */
+    ETH_ARP_T tArphd;
+    ssize_t nSendLen;
+
+    if (fd < 0 || NULL == arg)
+    {
+        ATLogError(AT::LOG_ERR, "%s:%d %s parameter error!",
+                __FILE__, __LINE__, __func__);
+        return -EINVAL;
+    }
+   
+    CLibUtil::Memcpy(tArphd.eh.h_dest, arg->cpDstMac, ETH_ALEN);
+    CLibUtil::Memcpy(tArphd.eh.h_source, arg->cpSrcMac, ETH_ALEN);
+    tArphd.eh.h_proto = CLibUtil::Htons(ETH_P_ARP);
+
+    tArphd.ah.ar_hrd = CLibUtil::Htons(ARPHRD_ETHER);
+    tArphd.ah.ar_pro = CLibUtil::Htons(ETH_P_ARP);
+    tArphd.ah.ar_hln = ETH_ALEN;
+    tArphd.ah.ar_pln = 4;
+    //tArphd.ah.ar_op = CLibUtil::Htons(ARPOP_REQUEST);
+    //tArphd.ah.ar_op = arg->nArpOp; 
+
+    CLibUtil::Memcpy(tArphd.smac, arg->cpSmac, ETH_ALEN);
+    CLibUtil::Memcpy(tArphd.tmac, arg->cpTmac, ETH_ALEN);
+    *(in_addr_t*)tArphd.sip = arg->nNetSip;
+    *(in_addr_t*)tArphd.tip = arg->nNetTip;
+
+
+    nSendLen = send(fd, &tArphd, sizeof(tArphd), 0);
+    if (-1 == nSendLen)
+    {
+        ATLogError(AT::LOG_ERR, "%s:%d %s parameter error!",
+                __FILE__, __LINE__, __func__);
+        return -errno;
+    }
+
+    return 0;
+}
+
+
 /*Notice:ifname must has enough space
  * subnet: net byteorder
  * */
@@ -208,6 +254,7 @@ void* CHostInfo::__RecvArpFunc(void *arg)
     AddrMacMap_T* mpAddrMac; 
     char cgBufForStrAddr[24];
     char cgBufForStrMac[24];
+    int nAfterSendEndDelay = ARP_SEND_END_DELAY;
 
     if (NULL == ipHostInfo)
     {
@@ -254,7 +301,11 @@ void* CHostInfo::__RecvArpFunc(void *arg)
     for (; true ;)
     {
         if (ipHostInfo->IsArpSendEnd())
-            break;
+        {
+            if (nAfterSendEndDelay <= 0)
+                break;
+            nAfterSendEndDelay--;
+        }
 
         FD_ZERO(&fds);
         FD_SET(fd, &fds);
@@ -326,6 +377,13 @@ void* CHostInfo::__SendArpFunc(void *arg)
     
     ArpSendThreadArg_T* tpSendThreadArg = (ArpSendThreadArg_T*)arg;
     CHostInfo* ipHostInfo = tpSendThreadArg->m_iHostInfo;
+    int fd = -1;
+    struct sockaddr_ll tSockaddrll;
+    SendEthInetARPArg_T tSendeEthInetArparg;
+    in_addr_t nAddrend = tpSendThreadArg->m_nAddrEnd; 
+    HostInetInfo* ipHostInet = ipHostInfo->m_iSubnetInfo;
+    u_char cgDstMac[ETH_ALEN];
+    u_char cgTmac[ETH_ALEN];
 
     if ( NULL == arg)
     {
@@ -336,18 +394,75 @@ void* CHostInfo::__SendArpFunc(void *arg)
         goto lab_end;
     }
 
-    printf("start:%08x end: %08x\n", 
+    ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s stataddr:%08x, endaddr:%08x", 
+            __FILE__, __LINE__, __func__, 
             tpSendThreadArg->m_nAddrStart, tpSendThreadArg->m_nAddrEnd);
-    printf("hostinfo: %p\n", tpSendThreadArg->m_iHostInfo);
 
+    if ( tpSendThreadArg->m_nAddrEnd <= tpSendThreadArg->m_nAddrStart)
+    {
+            ATLogError(AT::LOG_ERR, "%s:%d %s statraddr more endaddr",
+                    __FILE__, __LINE__, __func__);
+            goto lab_end;
+    }
+
+    if (NULL == ipHostInet)
+    {
+        ATLogError(AT::LOG_ERR, "%s:%d %s lack of subnet info!",
+                __FILE__, __LINE__, __func__);
+        goto lab_end;
+    }
+
+
+    fd = CLibUtil::Socket(PF_PACKET, SOCK_RAW, CLibUtil::Htons(ETH_P_ARP));
+    if (fd < 0)
+    {
+        ATLogError(AT::LOG_ERR, "%s:%d %s socket error!",
+                __FILE__, __LINE__, __func__);
+        goto lab_end;
+    }
+
+    CLibUtil::Memzero(&tSockaddrll, sizeof(tSockaddrll));
+    tSockaddrll.sll_family = PF_PACKET;
+    tSockaddrll.sll_protocol = CLibUtil::Htons(ETH_P_ARP);
+    tSockaddrll.sll_ifindex = ipHostInet->m_nInfindex;   
+    tSockaddrll.sll_hatype = htons(ARPHRD_ETHER);
+    tSockaddrll.sll_pkttype = PACKET_HOST;
+    tSockaddrll.sll_halen = ETH_ALEN;
+    CLibUtil::Memcpy(tSockaddrll.sll_addr, ipHostInet->m_caMac, ETH_ALEN);
+
+    if (0 != bind(fd, (struct sockaddr*)&tSockaddrll, sizeof(tSockaddrll)))
+    {
+        ATLogError(AT::LOG_ERR, "%s:%d %s bind error!",
+                __FILE__, __LINE__, __func__);
+        goto lab_end;
+    }
+   
+    tSendeEthInetArparg.cpSrcMac = ipHostInet->m_caMac;
+    CLibUtil::Memset(cgDstMac, 0XFF, ETH_ALEN);
+    tSendeEthInetArparg.cpDstMac = cgDstMac;
+    tSendeEthInetArparg.cpSmac = ipHostInet->m_caMac;
+    CLibUtil::Memset(cgTmac, 0X0, ETH_ALEN);
+    tSendeEthInetArparg.cpTmac = cgTmac;
+    tSendeEthInetArparg.nNetSip = ipHostInet->m_nAddr;
+    tSendeEthInetArparg.nArpOp = htons(ARPOP_REQUEST);
+    for(in_addr_t i=tpSendThreadArg->m_nAddrStart+1; i <= nAddrend; i++)
+    {
+        tSendeEthInetArparg.nNetTip = htonl(i);
+        ipHostInfo->SendEthInetArp(fd, &tSendeEthInetArparg);
+    }
     
 lab_end:
+    if (fd != -1)
+        close(fd);
     ipHostInfo->SetArpSendThreadDoneFlag(pthread_self());
     return NULL;
 }
 
 int CHostInfo::__CreateAndRunSendThreads(CHostInfo* hinfo)
 {
+    ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s hinfo:%p", 
+            __FILE__, __LINE__, __func__, hinfo);
+
     int ret;
     u_int i;
     int nHostCnt;
@@ -473,6 +588,37 @@ int CHostInfo::QuerySubnetAddrMacInfo(in_addr_t netaddr, in_addr_t mask)
 
     sleep(10);
 
+    ShowSubnetIpMac(subnet);
 
     return 0;
+}
+
+
+void CHostInfo::ShowSubnetIpMac(in_addr_t netsubnet)
+{
+    SubnetAddrMacMap_T::iterator subnetit;
+    AddrMacMap_T* imAddrMac;
+    AddrMacMap_T::iterator iAddrMacIt;
+    char cgBufForStrAddr[24];
+    char cgBufForStrMac[24];
+
+    subnetit = m_imSubnetAddrMacInfo.find(netsubnet);
+    if (subnetit == m_imSubnetAddrMacInfo.end())
+    {
+        ATLogError(AT::LOG_ERR, "subnet is not exist! %s:%d %s", 
+                __FILE__, __LINE__, __func__);
+        return;
+    }
+    imAddrMac = subnetit->second;
+
+    /*subnet info*/
+    for (iAddrMacIt = imAddrMac->begin(); 
+            iAddrMacIt != imAddrMac->end(); ++iAddrMacIt)
+    {
+        CNetUtil::NetAddrToStrAddr(iAddrMacIt->first, cgBufForStrAddr);
+        CNetUtil::MacToStrMac(iAddrMacIt->second.m_cgMac, cgBufForStrMac);
+        ATLogError(AT::LOG_INFO, "%s:%d %s: %s<-->%s", 
+                __FILE__, __LINE__, __func__,
+                cgBufForStrAddr, cgBufForStrMac);
+    }
 }

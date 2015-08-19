@@ -130,6 +130,7 @@ int main()
 
     iii = *it;
     ret = ihi.QuerySubnetAddrMacInfo(iii->m_nAddr, iii->m_nMask);
+    printf("addr: %08x\n", iii->m_nAddr);
     if (ret != 0)
     {
         cout << "ret:" << ret << endl;

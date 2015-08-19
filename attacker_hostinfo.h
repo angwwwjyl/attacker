@@ -43,6 +43,19 @@ typedef struct MacForContainer
     u_char m_cgMac[ETH_ALEN];
 }MacForContainer_T;
 
+
+/*for send eth inet arp*/
+typedef struct SendEthInetARPArg
+{
+    u_char* cpSrcMac;
+    u_char* cpDstMac;
+    u_char* cpSmac;
+    u_char* cpTmac;
+    in_addr_t nNetSip;
+    in_addr_t nNetTip;
+    u_short nArpOp;  /*net byte order*/
+}SendEthInetARPArg_T;
+
 typedef std::map<in_addr_t, MacForContainer_T> AddrMacMap_T;
 typedef std::map<in_addr_t, AddrMacMap_T*> SubnetAddrMacMap_T;
 typedef std::list<HostInetInfo*> InetInfoList_T;
@@ -101,6 +114,10 @@ class CHostInfo
             m_nArpSendEndFlag++;
         }
 
+        int SendEthInetArp(int fd, SendEthInetARPArg_T* arg);
+
+        void ShowSubnetIpMac(in_addr_t netsubnet);
+
     private:
         HostBaseInfo_T m_itBaseInfo;
         InetInfoList_T m_ilInetInfo;
@@ -113,6 +130,7 @@ class CHostInfo
         #define ARP_SEND_END_UNDONE   0
         #define ARP_RECV_SELECT_TIMEOUT_SEC 2
         #define ARP_RECV_BUF_LEN   512  /*must more than sizeof(struct eth_arp)*/
+        #define ARP_SEND_END_DELAY 5 
 
         u_int m_nArpSendThreadNum; 
         pthread_t m_ngArpSendTids[ARP_SEND_THREAD_MAX_NUM];
