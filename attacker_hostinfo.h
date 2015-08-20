@@ -95,7 +95,7 @@ class CHostInfo
             AddrMacMap_T::iterator it;
 
             it = map->find(netaddr);
-            if (it == map->end())
+            if (it != map->end()) /*found it*/
                 return -EKEYREJECTED;
 
             map->insert(std::pair<in_addr_t, MacForContainer_T>

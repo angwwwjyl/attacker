@@ -142,6 +142,29 @@ lab_close:
     return nRet;
 }
 
+#if 0
+/*ugly show arp packet*/
+static void ShowEthArpPkt(ETH_ARP_T* pkt)
+{
+    int i;
+    int cnt = sizeof(ETH_ARP_T)/16;
+    u_char *cp = (u_char*)pkt;
+
+    //printf("cnt: %d  len:%d\n", cnt, sizeof(ETH_ARP_T));
+    for(i = 0; i < cnt; ++i)
+    {
+        printf("%02x %02x %02x %02x %02x %02x %02x %02x     ",
+                cp[0], cp[1], cp[2], cp[3],
+                cp[4], cp[5], cp[6], cp[7]);
+        cp += 8;
+        printf("%02x %02x %02x %02x %02x %02x %02x %02x\n",
+                cp[0], cp[1], cp[2], cp[3],
+                cp[4], cp[5], cp[6], cp[7]);
+        cp += 8;
+    }
+    printf("\n");
+}
+#endif 
 
 /*for send arp using inet addr int eth network*/
 int CHostInfo::SendEthInetArp(int fd, SendEthInetARPArg_T* arg)
@@ -164,11 +187,11 @@ int CHostInfo::SendEthInetArp(int fd, SendEthInetARPArg_T* arg)
     tArphd.eh.h_proto = CLibUtil::Htons(ETH_P_ARP);
 
     tArphd.ah.ar_hrd = CLibUtil::Htons(ARPHRD_ETHER);
-    tArphd.ah.ar_pro = CLibUtil::Htons(ETH_P_ARP);
+    tArphd.ah.ar_pro = CLibUtil::Htons(ETH_P_IP);
     tArphd.ah.ar_hln = ETH_ALEN;
     tArphd.ah.ar_pln = 4;
     //tArphd.ah.ar_op = CLibUtil::Htons(ARPOP_REQUEST);
-    //tArphd.ah.ar_op = arg->nArpOp; 
+    tArphd.ah.ar_op = arg->nArpOp; 
 
     CLibUtil::Memcpy(tArphd.smac, arg->cpSmac, ETH_ALEN);
     CLibUtil::Memcpy(tArphd.tmac, arg->cpTmac, ETH_ALEN);
@@ -184,6 +207,7 @@ int CHostInfo::SendEthInetArp(int fd, SendEthInetARPArg_T* arg)
         return -errno;
     }
 
+    //ShowEthArpPkt(&tArphd);
     return 0;
 }
 
@@ -318,11 +342,17 @@ void* CHostInfo::__RecvArpFunc(void *arg)
             continue;
         
         tArpHdrData = (struct eth_arp*)cgBuf;
+
+        //ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s arpop:%d", 
+        //        __FILE__, __LINE__, __func__, CLibUtil::Ntohs(tArpHdrData->ah.ar_op));
         if (tArpHdrData->ah.ar_op != CLibUtil::Htons(ARPOP_REPLY))
         {
             continue;
         }
 
+
+        //ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s tip:%8x", 
+        //        __FILE__, __LINE__, __func__, *((in_addr_t*)tArpHdrData->tip));
         /*this arp reply is not send to me*/
         if ( *((in_addr_t*)tArpHdrData->tip) != ipHostInet->m_nAddr)
         {
@@ -330,7 +360,7 @@ void* CHostInfo::__RecvArpFunc(void *arg)
         }
 
         /*not in local subnet*/
-        if ( *((in_addr_t*)tArpHdrData->sip) != nSubnetNetAddr)
+        if ( (*((in_addr_t*)tArpHdrData->sip) & ipHostInet->m_nMask) != nSubnetNetAddr)
         {
             continue;
         }
@@ -340,7 +370,7 @@ void* CHostInfo::__RecvArpFunc(void *arg)
         {
             CNetUtil::NetAddrToStrAddr(*(in_addr_t*)tArpHdrData->sip, cgBufForStrAddr);
             CNetUtil::MacToStrMac(tArpHdrData->smac, cgBufForStrMac);
-            ATLogError(AT::LOG_WARN, "%s:%d %s ipconfilct %s<-->%s",
+            ATLogError(AT::LOG_WARN, "%s:%d %s may be ipconfilct %s<-->%s",
                     __FILE__, __LINE__, __func__,
                     cgBufForStrAddr, cgBufForStrMac);
 
@@ -542,6 +572,10 @@ void CHostInfo::__SetThreadArgs(int nsubhost)
  * addr: 10.1.5.0  mask:255.255.255.0*/
 int CHostInfo::QuerySubnetAddrMacInfo(in_addr_t netaddr, in_addr_t mask)
 {
+    ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s netaddr:%08x, mask:%08x", 
+            __FILE__, __LINE__, __func__, 
+            netaddr, mask);
+
     SubnetAddrMacMap_T::iterator it;
     in_addr_t nsubnet = netaddr & mask;
     AddrMacMap_T *imAddrmac;
@@ -579,6 +613,9 @@ int CHostInfo::QuerySubnetAddrMacInfo(in_addr_t netaddr, in_addr_t mask)
         m_imSubnetAddrMacInfo.insert(
                 std::pair<in_addr_t, AddrMacMap_T*>(nsubnet, imAddrmac));
     }
+    ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s subnet:%08x, addrmacmap:%p", 
+            __FILE__, __LINE__, __func__,
+            nsubnet, imAddrmac);
     
     __SetThreadArgs(ncount);
 
@@ -596,6 +633,9 @@ int CHostInfo::QuerySubnetAddrMacInfo(in_addr_t netaddr, in_addr_t mask)
 
 void CHostInfo::ShowSubnetIpMac(in_addr_t netsubnet)
 {
+    ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s", 
+            __FILE__, __LINE__, __func__); 
+
     SubnetAddrMacMap_T::iterator subnetit;
     AddrMacMap_T* imAddrMac;
     AddrMacMap_T::iterator iAddrMacIt;
@@ -610,6 +650,10 @@ void CHostInfo::ShowSubnetIpMac(in_addr_t netsubnet)
         return;
     }
     imAddrMac = subnetit->second;
+
+    ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s subnet:%08x, addrmacmap:%p", 
+            __FILE__, __LINE__, __func__,
+            subnetit->first, imAddrMac); 
 
     /*subnet info*/
     for (iAddrMacIt = imAddrMac->begin(); 

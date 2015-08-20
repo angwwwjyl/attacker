@@ -32,7 +32,7 @@ int AT::CLogger::DoInit()
 
     m_nPpid = getppid();
     m_nPid = getpid();
-    m_nTid = std::this_thread::get_id();
+    m_nTid = pthread_self();
 
     m_nMaxSize = 4096;  /*4M*/
     m_nCurSize = 0;
@@ -105,6 +105,7 @@ int AT::CDebugLogger::DoLog(int level, const char* fmt, ...)
 
     CLibUtil::GetTimeofDay(&tTV, NULL);
     CLibUtil::GetMtime(tTV.tv_sec, &tTM);
+    SetTid(pthread_self());
     nlen = CLibUtil::Snprintf(cabuf, BUF_LEN, "%s %s-%4d/%02d/%02d-%02d:%02d:%02d %d %d %d %s ",
             "[debug]", gs_caWeek[tTM.tm_wday],
             tTM.tm_year, tTM.tm_mon, tTM.tm_mday, tTM.tm_hour,
@@ -181,6 +182,7 @@ int AT::CRunningLogger::DoLog(int level, const char* fmt, ...)
 
     CLibUtil::GetTimeofDay(&tTV, NULL);
     CLibUtil::GetMtime(tTV.tv_sec, &tTM);
+    SetTid(pthread_self());
     nlen = CLibUtil::Snprintf(cabuf, BUF_LEN, 
             "[%s] %s-%4d/%02d/%02d-%02d:%02d:%02d %d %d %d ",
             gs_caLogLevelStr[level], gs_caWeek[tTM.tm_wday],

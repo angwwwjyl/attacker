@@ -9,6 +9,7 @@
 
 #include <sys/types.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include <attacker_types.h>
 #include <attacker_util.h>
@@ -62,10 +63,10 @@ class CLogger
         void SetPpid(pid_t ppid) { m_nPpid = ppid; }
 
         pid_t GetPid() { return m_nPid; }
-        void GetPid(pid_t pid) { m_nPid = pid; }
+        void SetPid(pid_t pid) { m_nPid = pid; }
 
-        std::thread::id GetTid() { return m_nTid; }
-        void GetTid(std::thread::id tid) { m_nTid = tid; }
+        pthread_t GetTid() { return m_nTid; }
+        void SetTid(pthread_t tid) { m_nTid = tid; }
 
         int GetFd() { return m_nFd; }
         char* GetLogFileName() { return m_caFileName; }
@@ -89,7 +90,7 @@ class CLogger
     protected:
         pid_t m_nPpid; 
         pid_t m_nPid; 
-        std::thread::id m_nTid; 
+        pthread_t m_nTid; 
         int m_nFd;
         char m_caFileName[LOGGER_FILENAME_LEN];
         int m_nMaxSize;   /*unit: KB*/
