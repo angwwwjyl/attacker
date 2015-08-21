@@ -17,6 +17,11 @@
 #include <time.h>
 #include <sys/time.h>
 
+#include <arpa/inet.h>
+#include <linux/if.h>
+#include <linux/if_ether.h>
+#include <linux/if_arp.h>
+
 class CLibUtil
 {
     public:
@@ -107,6 +112,36 @@ class CLibUtil
 };
 
 
+
+/***************************************************
+ * net lib begin
+ */
+/*for send eth inet arp*/
+typedef struct SendEthInetARPArg
+{
+    u_char* cpSrcMac;
+    u_char* cpDstMac;
+    u_char* cpSmac;
+    u_char* cpTmac;
+    in_addr_t nNetSip;
+    in_addr_t nNetTip;
+    u_short nArpOp;  /*net byte order*/
+}SendEthInetARPArg_T;
+
+typedef struct eth_arp
+{
+    struct ethhdr eh;
+    struct arphdr ah;
+
+    u_char smac[ETH_ALEN];
+    u_char sip[4];
+    u_char tmac[ETH_ALEN];
+    u_char tip[4];
+    u_char padding[18];
+}ETH_ARP_T;
+
+
+
 #define INVAILD_ADDR (0)
 #define INVAILD_NETMASK (0)
 #define INVAILD_INFINDEX (-1)
@@ -158,6 +193,7 @@ class CNetUtil
         static int GetIFState(const char* ifname);
         static int GetIFStateWithFd(int fd, const char* ifname);
         
+        static int SendEthInetArp(int fd, SendEthInetARPArg_T* arg);
 
     private:
         CNetUtil() {}  /*don't construct*/
@@ -171,5 +207,6 @@ class CNetUtil
         static u_char ms_nStrAddrMinLen;  /*1.1.1.1 = 8; 001.001.001.001 = 16*/
         static u_char ms_nFullStrAddr;  /*flag: full str(001.001.001.001) or str(1.1.1.1)*/
 };
+
 
 #endif

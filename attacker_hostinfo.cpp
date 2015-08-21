@@ -142,76 +142,6 @@ lab_close:
     return nRet;
 }
 
-#if 0
-/*ugly show arp packet*/
-static void ShowEthArpPkt(ETH_ARP_T* pkt)
-{
-    int i;
-    int cnt = sizeof(ETH_ARP_T)/16;
-    u_char *cp = (u_char*)pkt;
-
-    //printf("cnt: %d  len:%d\n", cnt, sizeof(ETH_ARP_T));
-    for(i = 0; i < cnt; ++i)
-    {
-        printf("%02x %02x %02x %02x %02x %02x %02x %02x     ",
-                cp[0], cp[1], cp[2], cp[3],
-                cp[4], cp[5], cp[6], cp[7]);
-        cp += 8;
-        printf("%02x %02x %02x %02x %02x %02x %02x %02x\n",
-                cp[0], cp[1], cp[2], cp[3],
-                cp[4], cp[5], cp[6], cp[7]);
-        cp += 8;
-    }
-    printf("\n");
-}
-#endif 
-
-/*for send arp using inet addr int eth network*/
-int CHostInfo::SendEthInetArp(int fd, SendEthInetARPArg_T* arg)
-{
-    /*ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s arg:%p", 
-            __FILE__, __LINE__, __func__, arg);
-    */
-    ETH_ARP_T tArphd;
-    ssize_t nSendLen;
-
-    if (fd < 0 || NULL == arg)
-    {
-        ATLogError(AT::LOG_ERR, "%s:%d %s parameter error!",
-                __FILE__, __LINE__, __func__);
-        return -EINVAL;
-    }
-   
-    CLibUtil::Memcpy(tArphd.eh.h_dest, arg->cpDstMac, ETH_ALEN);
-    CLibUtil::Memcpy(tArphd.eh.h_source, arg->cpSrcMac, ETH_ALEN);
-    tArphd.eh.h_proto = CLibUtil::Htons(ETH_P_ARP);
-
-    tArphd.ah.ar_hrd = CLibUtil::Htons(ARPHRD_ETHER);
-    tArphd.ah.ar_pro = CLibUtil::Htons(ETH_P_IP);
-    tArphd.ah.ar_hln = ETH_ALEN;
-    tArphd.ah.ar_pln = 4;
-    //tArphd.ah.ar_op = CLibUtil::Htons(ARPOP_REQUEST);
-    tArphd.ah.ar_op = arg->nArpOp; 
-
-    CLibUtil::Memcpy(tArphd.smac, arg->cpSmac, ETH_ALEN);
-    CLibUtil::Memcpy(tArphd.tmac, arg->cpTmac, ETH_ALEN);
-    *(in_addr_t*)tArphd.sip = arg->nNetSip;
-    *(in_addr_t*)tArphd.tip = arg->nNetTip;
-
-
-    nSendLen = send(fd, &tArphd, sizeof(tArphd), 0);
-    if (-1 == nSendLen)
-    {
-        ATLogError(AT::LOG_ERR, "%s:%d %s parameter error!",
-                __FILE__, __LINE__, __func__);
-        return -errno;
-    }
-
-    //ShowEthArpPkt(&tArphd);
-    return 0;
-}
-
-
 /*Notice:ifname must has enough space
  * subnet: net byteorder
  * */
@@ -280,11 +210,14 @@ void* CHostInfo::__RecvArpFunc(void *arg)
     char cgBufForStrMac[24];
     int nAfterSendEndDelay = ARP_SEND_END_DELAY;
 
+    /* arp reply not recv end*/
+    ipHostInfo->SetArpRecvEndFlag(ARP_RECV_END_DONE);
+
     if (NULL == ipHostInfo)
     {
         ATLogError(AT::LOG_ERR, "%s:%d %s lack of subnet info!",
                 __FILE__, __LINE__, __func__);
-        return NULL;
+        goto lab_end;
     }
 
     nSubnetNetAddr = ipHostInet->m_nAddr & ipHostInet->m_nMask;
@@ -293,7 +226,7 @@ void* CHostInfo::__RecvArpFunc(void *arg)
     {
         ATLogError(AT::LOG_ERR, "%s:%d %s lack of map for addr-mac!",
                 __FILE__, __LINE__, __func__);
-        return NULL;
+        goto lab_end;
     }
 
     fd = CLibUtil::Socket(PF_PACKET, SOCK_RAW, CLibUtil::Htons(ETH_P_ARP));
@@ -301,7 +234,7 @@ void* CHostInfo::__RecvArpFunc(void *arg)
     {
         ATLogError(AT::LOG_ERR, "%s:%d %s socket error!",
                 __FILE__, __LINE__, __func__);
-        return NULL;
+        goto lab_end;
     }
 
     CLibUtil::Memzero(&tSockaddrll, sizeof(tSockaddrll));
@@ -327,7 +260,10 @@ void* CHostInfo::__RecvArpFunc(void *arg)
         if (ipHostInfo->IsArpSendEnd())
         {
             if (nAfterSendEndDelay <= 0)
+            {
                 break;
+            }
+
             nAfterSendEndDelay--;
         }
 
@@ -380,6 +316,9 @@ void* CHostInfo::__RecvArpFunc(void *arg)
 
 lab_close:
     close(fd);
+
+lab_end:
+    ipHostInfo->SetArpRecvEndFlag(ARP_RECV_END_DONE);
     return NULL;
 }
 
@@ -478,7 +417,7 @@ void* CHostInfo::__SendArpFunc(void *arg)
     for(in_addr_t i=tpSendThreadArg->m_nAddrStart+1; i <= nAddrend; i++)
     {
         tSendeEthInetArparg.nNetTip = htonl(i);
-        ipHostInfo->SendEthInetArp(fd, &tSendeEthInetArparg);
+        CNetUtil::SendEthInetArp(fd, &tSendeEthInetArparg);
     }
     
 lab_end:
@@ -635,8 +574,15 @@ int CHostInfo::QuerySubnetAddrMacInfo(in_addr_t netaddr, in_addr_t mask)
     __CreateAndRunRecvThread(this);
 
     __CreateAndRunSendThreads(this);
+    
+    int delay = ARP_ADDR_MAC_DELAY;
+    for (; true ;)
+    {
+        if (IsArpRecvEnd() || --delay < 0)
+            break;
 
-    sleep(10);
+        sleep(1);
+    }
 
     ShowSubnetIpMac(subnet);
 

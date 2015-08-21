@@ -44,18 +44,6 @@ typedef struct MacForContainer
 }MacForContainer_T;
 
 
-/*for send eth inet arp*/
-typedef struct SendEthInetARPArg
-{
-    u_char* cpSrcMac;
-    u_char* cpDstMac;
-    u_char* cpSmac;
-    u_char* cpTmac;
-    in_addr_t nNetSip;
-    in_addr_t nNetTip;
-    u_short nArpOp;  /*net byte order*/
-}SendEthInetARPArg_T;
-
 typedef std::map<in_addr_t, MacForContainer_T> AddrMacMap_T;
 typedef std::map<in_addr_t, AddrMacMap_T*> SubnetAddrMacMap_T;
 typedef std::list<HostInetInfo*> InetInfoList_T;
@@ -109,12 +97,20 @@ class CHostInfo
             return (m_nArpSendEndFlag == m_nArpSendEndDone);
         }
 
+        #define ARP_RECV_END_DONE   1
+        #define ARP_RECV_END_UNDONE   0
+        bool IsArpRecvEnd()
+        {
+            return (m_nArpRecvEnd == ARP_RECV_END_DONE);
+        }
+
+        void SetArpRecvEndFlag(int flag) { m_nArpRecvEnd = flag; }
+        int GetArpRecvEndFlag(int flag) { return m_nArpRecvEnd; }
+
         void SetArpSendThreadDoneFlag(pthread_t id)
         {
             m_nArpSendEndFlag++;
         }
-
-        int SendEthInetArp(int fd, SendEthInetARPArg_T* arg);
 
         void ShowSubnetIpMac(in_addr_t netsubnet);
 
@@ -125,12 +121,11 @@ class CHostInfo
         SubnetAddrMacMap_T m_imSubnetAddrMacInfo;
         
         #define ARP_SEND_THREAD_MAX_NUM 16 
-        #define ARP_RECV_END_DONE   1
-        #define ARP_RECV_END_UNDONE   0
         #define ARP_SEND_END_UNDONE   0
         #define ARP_RECV_SELECT_TIMEOUT_SEC 2
         #define ARP_RECV_BUF_LEN   512  /*must more than sizeof(struct eth_arp)*/
         #define ARP_SEND_END_DELAY 5 
+        #define ARP_ADDR_MAC_DELAY 5
 
         u_int m_nArpSendThreadNum; 
         pthread_t m_ngArpSendTids[ARP_SEND_THREAD_MAX_NUM];
@@ -156,18 +151,6 @@ class CHostInfo
 
 
 };
-
-typedef struct eth_arp
-{
-    struct ethhdr eh;
-    struct arphdr ah;
-
-    u_char smac[ETH_ALEN];
-    u_char sip[4];
-    u_char tmac[ETH_ALEN];
-    u_char tip[4];
-    u_char padding[18];
-}ETH_ARP_T;
 
 #endif
 

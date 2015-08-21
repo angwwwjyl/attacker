@@ -533,3 +533,73 @@ int CNetUtil::GetIFState(const char* ifname)
     return state;
 }
 
+#if 0
+/*ugly show arp packet*/
+static void ShowEthArpPkt(ETH_ARP_T* pkt)
+{
+    int i;
+    int cnt = sizeof(ETH_ARP_T)/16;
+    u_char *cp = (u_char*)pkt;
+
+    //printf("cnt: %d  len:%d\n", cnt, sizeof(ETH_ARP_T));
+    for(i = 0; i < cnt; ++i)
+    {
+        printf("%02x %02x %02x %02x %02x %02x %02x %02x     ",
+                cp[0], cp[1], cp[2], cp[3],
+                cp[4], cp[5], cp[6], cp[7]);
+        cp += 8;
+        printf("%02x %02x %02x %02x %02x %02x %02x %02x\n",
+                cp[0], cp[1], cp[2], cp[3],
+                cp[4], cp[5], cp[6], cp[7]);
+        cp += 8;
+    }
+    printf("\n");
+}
+#endif 
+
+/*for send arp using inet addr int eth network*/
+int CNetUtil::SendEthInetArp(int fd, SendEthInetARPArg_T* arg)
+{
+    /*ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s arg:%p", 
+            __FILE__, __LINE__, __func__, arg);
+    */
+    ETH_ARP_T tArphd;
+    ssize_t nSendLen;
+
+    if (fd < 0 || NULL == arg)
+    {
+        ATLogError(AT::LOG_ERR, "%s:%d %s parameter error!",
+                __FILE__, __LINE__, __func__);
+        return -EINVAL;
+    }
+   
+    CLibUtil::Memcpy(tArphd.eh.h_dest, arg->cpDstMac, ETH_ALEN);
+    CLibUtil::Memcpy(tArphd.eh.h_source, arg->cpSrcMac, ETH_ALEN);
+    tArphd.eh.h_proto = CLibUtil::Htons(ETH_P_ARP);
+
+    tArphd.ah.ar_hrd = CLibUtil::Htons(ARPHRD_ETHER);
+    tArphd.ah.ar_pro = CLibUtil::Htons(ETH_P_IP);
+    tArphd.ah.ar_hln = ETH_ALEN;
+    tArphd.ah.ar_pln = 4;
+    //tArphd.ah.ar_op = CLibUtil::Htons(ARPOP_REQUEST);
+    tArphd.ah.ar_op = arg->nArpOp; 
+
+    CLibUtil::Memcpy(tArphd.smac, arg->cpSmac, ETH_ALEN);
+    CLibUtil::Memcpy(tArphd.tmac, arg->cpTmac, ETH_ALEN);
+    *(in_addr_t*)tArphd.sip = arg->nNetSip;
+    *(in_addr_t*)tArphd.tip = arg->nNetTip;
+
+
+    nSendLen = send(fd, &tArphd, sizeof(tArphd), 0);
+    if (-1 == nSendLen)
+    {
+        ATLogError(AT::LOG_ERR, "%s:%d %s parameter error!",
+                __FILE__, __LINE__, __func__);
+        return -errno;
+    }
+
+    //ShowEthArpPkt(&tArphd);
+    return 0;
+}
+
+
