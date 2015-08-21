@@ -1,4 +1,5 @@
 #include <attacker_util.h>
+#include <attacker_log.h>
 
 #include <linux/if_ether.h>
 
@@ -482,4 +483,53 @@ in_addr_t CNetUtil::GetNetMask(const char* ifname, in_addr_t netaddr)
     return mask;
 }
 
+
+int CNetUtil::GetIFStateWithFd(int fd, const char* ifname)
+{
+    struct ifreq tIfr;
+
+    if (fd < 0 || NULL == ifname)
+    {
+        ATLogError(AT::LOG_ERR, "%s:%d %s parameter error!",
+                __FILE__, __LINE__, __func__);
+        return IF_STATE_DOWN;
+    }
+
+    CLibUtil::Strncpy(tIfr.ifr_name, const_cast<char*>(ifname), IFNAMSIZ);
+
+    if (CLibUtil::IOCtl(fd, SIOCGIFFLAGS, &tIfr) < 0)   
+    {
+        ATLogError(AT::LOG_ERR, "%s:%d %s ioctl error:%d!",
+                __FILE__, __LINE__, __func__,
+                errno);
+        return IF_STATE_DOWN;
+    }
+
+    ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s ifflags:%08x running:%d", 
+            __FILE__, __LINE__, __func__, tIfr.ifr_flags, tIfr.ifr_flags & IFF_RUNNING);
+
+    if (tIfr.ifr_flags & IFF_RUNNING)
+        return IF_STATE_UP;
+
+    return IF_STATE_DOWN;
+}
+
+int CNetUtil::GetIFState(const char* ifname)
+{
+    int fd;
+    int state;
+
+    fd = CLibUtil::Socket(PF_INET, SOCK_DGRAM, 0);
+    if (fd < 0)
+    {
+        ATLogError(AT::LOG_ERR, "%s:%d %s parameter error!",
+                __FILE__, __LINE__, __func__);
+        return IF_STATE_DOWN;
+    }
+
+    state = GetIFStateWithFd(fd, ifname); 
+
+    close(fd);
+    return state;
+}
 

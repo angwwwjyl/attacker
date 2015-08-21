@@ -598,6 +598,19 @@ int CHostInfo::QuerySubnetAddrMacInfo(in_addr_t netaddr, in_addr_t mask)
                 __FILE__, __LINE__, __func__);
         return -ENOENT;
     }
+
+    ATLogDebug(DEBUG_HOSTINFO, "%s:%d %s ifname:%s", 
+            __FILE__, __LINE__, __func__, 
+            iSubnetInfo->m_caIfname);
+
+    if (IF_STATE_DOWN == CNetUtil::GetIFState(iSubnetInfo->m_caIfname))
+    {
+        ATLogError(AT::LOG_ERR, "%s:%d %s interface:%s is downing", 
+                __FILE__, __LINE__, __func__,
+                iSubnetInfo->m_caIfname);
+        return -EINVAL;
+    }
+
     m_iSubnetInfo = iSubnetInfo;
 
     /*clear old data*/

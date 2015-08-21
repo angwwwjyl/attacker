@@ -117,20 +117,42 @@ int main()
     ATLogDebugInit();
     ATLogErrorInit();
 
+    
+
     CHostInfo ihi;
-    //HostBaseInfo *ibi;
+    HostBaseInfo *ibi;
     HostInetInfo *iii;
     InetInfoList_T *iil;
     InetInfoList_T::iterator it;
 
-    ihi.QueryInetInfo();
-    //ibi = ihi.GetBaseInfo();
-    iil = ihi.GetInetInfo();
-    it = iil->begin();
 
-    iii = *it;
+    ihi.QueryInetInfo();
+
+    ibi = ihi.GetBaseInfo();
+    iil = ihi.GetInetInfo();
+
+    printf("name: %s    nis:%s\n", ibi->m_caName, ibi->m_caNIS);
+    //printf("inet num: %d\n", iil->size());
+    for (it = iil->begin(); it != iil->end(); it++)
+    {
+        iii = *it;
+
+        char caStr[64];
+        //char *cp;
+
+        printf("ifname:%s addr:%s\n",
+                iii->m_caIfname, CNetUtil::NetAddrToStrAddr(iii->m_nAddr, caStr));
+        
+        CNetUtil::MacToStrMac(iii->m_caMac, caStr); 
+        //cp = CNetUtil::MacToStrMac(iii->m_caMac, caStr); 
+        //cout << cp << endl;
+        printf("infindex:%d  mac:%s\n",
+                iii->m_nInfindex, caStr);
+
+        cout << endl;
+    }
+
     ret = ihi.QuerySubnetAddrMacInfo(iii->m_nAddr, iii->m_nMask);
-    printf("addr: %08x\n", iii->m_nAddr);
     if (ret != 0)
     {
         cout << "ret:" << ret << endl;

@@ -112,6 +112,8 @@ class CLibUtil
 #define INVAILD_INFINDEX (-1)
 #define STRADDR_MIN_LEN (8)
 #define FULL_STRADDR_MIN_LEN (16)
+#define IF_STATE_UP (1)
+#define IF_STATE_DOWN (0)
 
 class CNetUtil
 {
@@ -151,6 +153,11 @@ class CNetUtil
         /*if fail return INVAILD_NETMASK*/
         static in_addr_t GetNetMask(const char* ifname, in_addr_t netaddr);
         static in_addr_t GetNetMaskWithFd(int fd, const char* ifname, in_addr_t netaddr);
+        
+        /*running: IFF_UP, other: IFF_DOWN*/
+        static int GetIFState(const char* ifname);
+        static int GetIFStateWithFd(int fd, const char* ifname);
+        
 
     private:
         CNetUtil() {}  /*don't construct*/
